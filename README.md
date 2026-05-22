@@ -82,7 +82,6 @@ bash bin/git-ctl.sh status
 - 服务后台运行，不占用终端
 - 日志输出到 `log/app.log`（可通过 logrotate 管理日志大小）
 - PID 文件存放在 `/var/run/git-ctl-webui.pid`
-- 详细使用说明请查看 [bin/README.md](bin/README.md)
 
 ### 日志管理
 
