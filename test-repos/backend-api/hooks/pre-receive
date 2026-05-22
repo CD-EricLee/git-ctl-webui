@@ -1,0 +1,6 @@
+#!/bin/bash
+# Git pre-receive hook for backend-api
+# Managed by Git Control WebUI
+
+echo "Pre-receive hook for backend-api"
+exit 0

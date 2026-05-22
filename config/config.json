@@ -1,0 +1,6 @@
+{
+  "session_timeout_minutes": 10,
+  "username": "admin",
+  "password": "admin",
+  "port": 50000
+}

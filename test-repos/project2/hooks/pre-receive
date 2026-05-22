@@ -1,0 +1,6 @@
+#!/bin/bash
+# Git pre-receive hook for project2
+# Managed by Git Control WebUI
+
+echo "Pre-receive hook for project2"
+exit 0

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Git分支管理系统</title>
+    <link rel="icon"
+          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔀</text></svg>"
+          type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        const projects = {{ projects | tojson | safe }};
+    </script>
+</head>
+<body>
+
+
+<!-- 删除分支确认弹窗 -->
+<div class="modal-overlay" id="delete-modal">
+    <div class="modal">
+        <h3 style="color: #c62828;">🗑️ 删除分支确认</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 12px;">项目：<strong style="color: #667eea;"
+                                                                                   id="delete-project-name"></strong>
+        </p>
+        <div style="background: #fff3e0; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+            <p style="font-size: 13px; color: #e65100; margin: 0;">⚠️ 删除后无法恢复，请确认要删除以下分支：</p>
+        </div>
+        <div style="margin-bottom: 16px; max-height: 200px; overflow-y: auto;">
+            <table class="modal-table">
+                <thead>
+                <tr>
+                    <th style="width: 24px;">#</th>
+                    <th>分支名称</th>
+                </tr>
+                </thead>
+                <tbody id="delete-branches"></tbody>
+            </table>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeDeleteModal()" title="取消">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <button class="btn-delete-modal" onclick="confirmDelete()" title="确认删除">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast 通知容器 -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Toast历史记录按钮 -->
+<div class="toast-history-buttons">
+    <div class="toast-history-btn-group" id="toast-history-btn-group">
+        <button class="toast-history-btn" id="toast-history-btn" onclick="showToastHistory()" title="查看通知历史">
+            <span class="history-indicator" id="history-indicator">▼</span>
+            <span class="history-text">🔔 历史通知</span>
+            <span id="toast-history-badge" class="toast-history-badge" style="display: none;">0</span>
+        </button>
+        <button class="history-clear-btn" id="history-clear-btn" onclick="event.stopPropagation(); clearToastHistory();"
+                title="清空所有通知" style="display: none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- 通用确认弹窗 -->
+<div class="modal-overlay" id="confirm-modal">
+    <div class="modal" style="max-width: 360px;">
+        <div id="confirm-icon" style="font-size: 48px; text-align: center; margin-bottom: 16px;"></div>
+        <h3 id="confirm-title" style="text-align: center; margin-bottom: 12px;"></h3>
+        <p id="confirm-message" style="font-size: 14px; color: #666; text-align: center; margin-bottom: 20px;"></p>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeConfirmModal()" title="取消">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <button id="confirm-action-btn" class="btn-primary" onclick="confirmAction()" title="确认">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 放开分支弹窗 -->
+<div class="modal-overlay" id="unlock-modal">
+    <div class="modal">
+        <h3>🔓 放开分支</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 12px;">项目：<strong style="color: #667eea;"
+                                                                                   id="unlock-project-name"></strong>
+        </p>
+        <div style="margin-bottom: 16px; max-height: 150px; overflow-y: auto;">
+            <table class="modal-table">
+                <thead>
+                <tr>
+                    <th style="width: 24px;">#</th>
+                    <th>分支名称</th>
+                </tr>
+                </thead>
+                <tbody id="modal-branches"></tbody>
+            </table>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="auto-lock-enable" onchange="toggleAutoLock()">
+                <span style="font-size: 14px; color: #333;">启用自动锁定</span>
+            </label>
+        </div>
+        <div id="auto-lock-settings" style="display: none; margin-bottom: 16px;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 13px; color: #666;">放开分支</span>
+                <input type="number" id="auto-lock-minutes" value="5" min="1" step="1" placeholder="时间"
+                       style="width: 80px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none;">
+                <select id="auto-lock-unit"
+                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none;">
+                    <option value="minutes">分钟</option>
+                    <option value="hours">小时</option>
+                </select>
+                <span style="font-size: 13px; color: #666;">后将被自动锁定</span>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeUnlockModal()" title="取消">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <button class="btn-primary" onclick="confirmUnlock()" title="确认放开">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 设置自动锁定弹窗 -->
+<div class="modal-overlay" id="schedule-modal">
+    <div class="modal">
+        <h3>⏰ 设置自动锁定</h3>
+        <p style="font-size: 14px; color: #666; margin-bottom: 12px;">项目：<strong style="color: #667eea;"
+                                                                                   id="schedule-project-name"></strong>
+        </p>
+        <div style="margin-bottom: 16px; max-height: 150px; overflow-y: auto;">
+            <table class="modal-table">
+                <thead>
+                <tr>
+                    <th style="width: 24px;">#</th>
+                    <th>分支名称</th>
+                </tr>
+                </thead>
+                <tbody id="schedule-branches"></tbody>
+            </table>
+        </div>
+        <div style="margin-bottom: 16px;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 13px; color: #666;">放开分支</span>
+                <input type="number" id="schedule-minutes" value="5" min="1" step="1" placeholder="时间"
+                       style="width: 80px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none;">
+                <select id="schedule-unit"
+                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none;">
+                    <option value="minutes">分钟</option>
+                    <option value="hours">小时</option>
+                </select>
+                <span style="font-size: 13px; color: #666;">后将被自动锁定</span>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeScheduleModal()" title="取消">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <button class="btn-primary" onclick="confirmScheduleLock()" title="确认设置">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="header">
+    <h1>🔀 Git分支管理系统</h1>
+    <div class="header-actions">
+        <div class="session-card">
+            <div class="session-content">
+                <span class="session-label">会话超时</span>
+                <span id="timeout-wrapper">
+                        <span id="session-timeout-display">{{ session_timeout }}</span>
+                        <span class="timeout-unit">分钟</span>
+                        <button class="edit-timeout-btn" onclick="toggleEditTimeout()" title="修改超时时间">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                                <path d="m15 5 4 4"></path>
+                            </svg>
+                        </button>
+                    </span>
+                <span id="timeout-edit-container" style="display: none; align-items: center; gap: 4px;">
+                        <input type="number" id="session-timeout-input" value="{{ session_timeout }}" min="1" max="1440"
+                               class="timeout-input" onkeydown="if(event.keyCode===13) saveTimeout()">
+                        <span class="timeout-unit">分钟</span>
+                        <button id="save-timeout-btn" class="icon-btn icon-btn-success" onclick="saveTimeout()"
+                                title="保存">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </button>
+                        <button id="cancel-timeout-btn" class="icon-btn icon-btn-danger" onclick="cancelEditTimeout()"
+                                title="取消">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </span>
+            </div>
+        </div>
+        <a href="/logout" class="logout-btn" title="退出登录">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+        </a>
+    </div>
+</div>
+
+<!-- 配置管理 -->
+<div class="project-card">
+    <div class="project-header" onclick="toggleTabContainer()"
+         style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            <span class="project-name">
+                ⚙️ 配置管理
+            </span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button onclick="event.stopPropagation(); refreshPage();" title="刷新配置" class="refresh-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 16h5v5"/>
+                </svg>
+            </button>
+            <button class="toggle-btn">
+                <span id="tab-toggle-icon">{% if scanned_repos %}▲{% else %}▼{% endif %}</span>
+            </button>
+        </div>
+    </div>
+    <div id="tab-container"
+         class="tab-container-inner {% if scanned_repos %}display-block{% else %}display-none{% endif %}">
+        <!-- Tab标签 -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="add-project"
+                    onclick="event.stopPropagation(); switchTab('add-project')">➕ 添加新项目
+            </button>
+            <button class="tab-btn" data-tab="default-config"
+                    onclick="event.stopPropagation(); switchTab('default-config')">🌐 全局默认配置
+            </button>
+        </div>
+
+        <!-- Tab内容区域 -->
+        <div class="tab-content">
+            <!-- 添加新项目Tab -->
+            <div id="tab-add-project" class="tab-panel active" style="display: block;">
+                <div style="margin-bottom: 16px; padding: 12px; background: #fff3e0; border-radius: 6px; border-left: 4px solid #ff9800;">
+                    <p style="font-size: 13px; color: #e65100; margin: 0;">
+                        💡 提示：可以通过扫描 Git 服务器路径，自动发现已安装 pre-receive 钩子的项目
+                    </p>
+                </div>
+
+                <form id="addProjectForm" class="add-project-form" onclick="event.stopPropagation()">
+                    <div class="add-mode-selector">
+                        <select id="add-mode" class="form-control" onchange="toggleAddMode()"
+                                style="width: 140px; flex-shrink: 0;">
+                            <option value="scan">🔍 扫描仓库</option>
+                            <option value="manual">⌨️ 手动添加</option>
+                        </select>
+                    </div>
+                    <div id="scan-mode" class="add-mode-content">
+                        <input type="text" name="base_path" id="base-path-input" class="form-control"
+                               placeholder="Git服务器仓库根目录路径（如 /home/git/repositories），留空使用测试数据"
+                               style="flex: 1;" onkeydown="if(event.keyCode===13) submitScan()">
+                        <button type="button" onclick="submitScan()"
+                                style="padding: 10px 20px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
+                            确定
+                        </button>
+                    </div>
+                    <div id="manual-mode" class="add-mode-content" style="display: none;">
+                        <input type="text" name="project" id="project-input" class="form-control"
+                               placeholder="输入项目名称（需与Git仓库目录名一致）" required style="flex: 1;"
+                               onkeydown="if(event.keyCode===13) submitManual()">
+                        <button type="button" onclick="submitManual()" class="btn-primary" style="white-space: nowrap;">
+                            确定
+                        </button>
+                    </div>
+                </form>
+
+                <div id="scanResults"
+                     style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; display: none;"></div>
+            </div>
+
+            <!-- 全局默认配置Tab -->
+            <div id="tab-default-config" class="tab-panel" style="display: none;">
+                <div style="background: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px 16px; border-radius: 0 6px 6px 0; margin-bottom: 16px;">
+                    <p style="font-size: 13px; color: #1976d2; margin: 0;">
+                        💡 说明：全局配置中的分支保护规则会自动应用到所有未创建单独配置的子项目。如需对某个项目进行单独管理，请为该项目创建独立配置。
+                    </p>
+                </div>
+                <div class="branches-list">
+                    {% if not project_branches[DEFAULT_CONFIG_NAME] %}
+                    <div id="no-default-branches" class="empty-state">
+                        <div class="empty-state-icon">🔀</div>
+                        <h3>暂无默认分支</h3>
+                        <p>点击下方"添加分支"按钮，为所有项目设置默认保护分支</p>
+                    </div>
+                    {% else %}
+                    {% for branch in project_branches[DEFAULT_CONFIG_NAME] %}
+                    {% set is_locked = branch.locked if branch.locked is defined else not branch.startswith('#') %}
+                    {% set branch_name = branch.name if branch.name is defined else (branch[2:] if branch.startswith('#
+                    ') else (branch[1:] if branch.startswith('#') else branch)) %}
+                    {% set escaped_branch_name = branch_name|replace('/', '__slash__')|replace('\\',
+                    '__backslash__')|replace('"', '__quote__')|replace("'", "__singlequote__") %}
+                    {% set auto_lock_time = branch.auto_lock_time if branch.auto_lock_time is defined else
+                    project_auto_lock[DEFAULT_CONFIG_NAME].get(branch_name) %}
+                    <div class="branch-row" id="row-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}">
+                        <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+                            <span id="branch-text-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                  class="branch-name">{{ branch_name }}</span>
+                            <button onclick="startInlineEdit('{{ DEFAULT_CONFIG_NAME }}', '{{ branch_name | escapejs }}')"
+                                    id="edit-btn-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                    class="action-btn action-btn-edit" title="编辑">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                                    <path d="m15 5 4 4"></path>
+                                </svg>
+                            </button>
+                            <input type="text" id="branch-input-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                   value="{{ branch_name }}"
+                                   style="display: none; padding: 8px 12px; border: 1px solid #667eea; border-radius: 4px; width: 200px; font-size: 14px;">
+                            <button onclick="saveInlineEdit('{{ DEFAULT_CONFIG_NAME }}', '{{ branch_name | escapejs }}')"
+                                    id="save-btn-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                    class="action-btn action-btn-save" style="display: none;" title="保存">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            </button>
+                            <button onclick="cancelInlineEdit('{{ DEFAULT_CONFIG_NAME }}', '{{ branch_name | escapejs }}')"
+                                    id="cancel-btn-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                    class="action-btn action-btn-cancel" style="display: none;" title="取消">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="branch-actions">
+                            {% if auto_lock_time %}
+                            {% set auto_lock_unit = branch.auto_lock_unit if branch.auto_lock_unit is defined else
+                            'minutes' %}
+                            <div class="auto-lock-indicator">
+                                <span class="auto-lock-icon">⏰</span>
+                                <span class="auto-lock-time" data-project="{{ DEFAULT_CONFIG_NAME }}"
+                                      data-branch="{{ branch_name }}"
+                                      data-auto-lock-time="{{ auto_lock_time }}"
+                                      data-auto-lock-unit="{{ auto_lock_unit }}"
+                                      title="点击编辑自动锁定时间">{{ auto_lock_time }}</span>
+                                <span class="auto-lock-unit">{{ '小时' if auto_lock_unit == 'hours' else '分钟' }}</span>
+                            </div>
+                            {% endif %}
+                            <button onclick="syncBranchToAllProjects('{{ branch_name | escapejs }}')" class="action-btn btn-sync"
+                                    title="应用到所有项目">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 5v14M5 12l7 7 7-7"></path>
+                                </svg>
+                            </button>
+                            <button onclick="showDeleteBranchConfirmFromElement(this)" 
+                                    data-project="{{ DEFAULT_CONFIG_NAME }}" 
+                                    data-branch="{{ branch_name }}"
+                                    class="action-btn action-btn-delete" title="删除">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- 添加默认分支 -->
+                <div style="margin-top: 15px;">
+                    <button onclick="toggleAddBranch('{{ DEFAULT_CONFIG_NAME }}')"
+                            id="add-branch-btn-{{ DEFAULT_CONFIG_NAME }}" class="add-branch-btn" title="添加默认分支">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                    <form id="add-branch-form-{{ DEFAULT_CONFIG_NAME }}"
+                          style="display: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; background: #f8f9fa; border-radius: 6px; margin-top: 8px;"
+                          onsubmit="event.preventDefault(); submitAddBranch('{{ DEFAULT_CONFIG_NAME }}');">
+                        <input type="text" name="branch" placeholder="分支名称（如 refs/heads/main）" required
+                               style="flex: 1; min-width: 350px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                        <input type="hidden" name="project" value="{{ DEFAULT_CONFIG_NAME }}">
+                        <div style="display: flex; gap: 4px;">
+                            <button type="submit" class="btn-primary" title="添加分支">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+                            <button type="button" onclick="toggleAddBranch('{{ DEFAULT_CONFIG_NAME }}')"
+                                    class="btn-cancel" title="取消">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 项目管理面板 -->
+<div class="project-card">
+    <div class="project-header" onclick="toggleProjectsContainer()"
+         style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            <span class="project-name">
+                📁 项目管理
+                {% if projects %}
+                <span class="badge">{{ projects|length }} 个项目</span>
+                {% endif %}
+            </span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button onclick="event.stopPropagation(); refreshPage();" title="刷新项目" class="refresh-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 16h5v5"/>
+                </svg>
+            </button>
+            <button class="toggle-btn">
+                <span id="projects-toggle-icon">▼</span>
+            </button>
+        </div>
+    </div>
+    <div id="projects-container"
+         style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #f0f0f0;">
+        {% if not projects %}
+        <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <h3>暂无项目</h3>
+            <p>点击上方"添加项目"按钮，开始管理您的Git仓库分支</p>
+        </div>
+        {% else %}
+        {% for project in projects %}
+        <div class="project-card" data-project="{{ project }}" style="margin-bottom: 16px;">
+            <div class="project-header" onclick="toggleProjectBranches('{{ project }}')" style="cursor: pointer;">
+                    <span class="project-name">
+                        <span class="project-toggle-icon">▼</span>
+                        {{ project }}
+                        <span class="badge">{{ project_branches[project]|length }} 个管理分支</span>
+                    </span>
+                <span style="display: flex; align-items: center; gap: 6px;" onclick="event.stopPropagation();">
+                        <button onclick="event.stopPropagation(); refreshPage();" title="刷新配置" class="refresh-btn"
+                                style="margin-right: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                                <path d="M16 16h5v5"/>
+                            </svg>
+                        </button>
+                        <button class="delete-project-btn" onclick="deleteProject('{{ project }}', this)"
+                                title="删除配置（不影响源码）">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18"></path>
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </span>
+            </div>
+
+            <div id="project-content-{{ project }}" class="project-content">
+
+                {% if project_branches[project] %}
+                <div class="batch-actions" onclick="event.stopPropagation();">
+                    <input type="checkbox" id="select-all-{{ project }}" onchange="toggleSelectAll('{{ project }}')"
+                           style="width: 18px; height: 18px;">
+                    <button class="btn-success" onclick="event.stopPropagation(); batchLockSelected();">🔒 锁定</button>
+                    <button class="btn-danger" onclick="event.stopPropagation(); batchUnlockSelected();">🔓 放开</button>
+                    <button class="btn-secondary" onclick="event.stopPropagation(); scheduleLockSelected();"
+                            title="为选中分支设置自动锁定">⏰ 自动锁定
+                    </button>
+                    <button class="btn-delete" onclick="event.stopPropagation(); batchDeleteSelected();"
+                            title="删除选中分支">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+                {% endif %}
+
+                <div class="branches-list">
+                    {% if not project_branches[project] %}
+                    <div style="text-align: center; padding: 20px; color: #999;">暂无管理分支</div>
+                    {% else %}
+                    {% for branch in project_branches[project] %}
+                    {% set is_locked = branch.locked if branch.locked is defined else not branch.startswith('#') %}
+                    {% set branch_name = branch.name if branch.name is defined else (branch[2:] if branch.startswith('#
+                    ') else branch) %}
+                    {% set escaped_branch_name = branch_name|replace('/', '__slash__')|replace('\\',
+                    '__backslash__')|replace('"', '__quote__')|replace("'", "__singlequote__") %}
+                    {% set auto_lock_time = branch.auto_lock_time if branch.auto_lock_time is defined else
+                    project_auto_lock[project].get(branch_name) %}
+                    <div class="branch-row" id="row-{{ project }}-{{ escaped_branch_name }}">
+                        <input type="checkbox" id="select-{{ project }}-{{ escaped_branch_name }}"
+                               class="branch-checkbox"
+                               onclick="event.stopPropagation(); toggleBranchSelect('{{ project }}', '{{ branch_name | escapejs }}')">
+                        <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+                            <span id="branch-text-{{ project }}-{{ escaped_branch_name }}" class="branch-name">{{ '🔒 ' if is_locked else '' }}{{ branch_name }}</span>
+                            <button onclick="startInlineEdit('{{ project }}', '{{ branch_name | escapejs }}')"
+                                    id="edit-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    class="action-btn action-btn-edit" title="编辑">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                                    <path d="m15 5 4 4"></path>
+                                </svg>
+                            </button>
+                            <input type="text" id="branch-input-{{ project }}-{{ escaped_branch_name }}"
+                                   value="{{ branch_name }}"
+                                   style="display: none; padding: 8px 12px; border: 1px solid #667eea; border-radius: 4px; width: 200px; font-size: 14px;">
+                            <button onclick="saveInlineEdit('{{ project }}', '{{ branch_name | escapejs }}')"
+                                    id="save-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    class="action-btn action-btn-save" style="display: none;" title="保存">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            </button>
+                            <button onclick="cancelInlineEdit('{{ project }}', '{{ branch_name | escapejs }}')"
+                                    id="cancel-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    class="action-btn action-btn-cancel" style="display: none;" title="取消">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="branch-actions">
+                            {% if auto_lock_time %}
+                            {% set auto_lock_unit = branch.auto_lock_unit if branch.auto_lock_unit is defined else
+                            'minutes' %}
+                            <div class="auto-lock-indicator">
+                                <span class="auto-lock-icon">⏰</span>
+                                <span class="auto-lock-time" data-project="{{ project }}"
+                                      data-branch="{{ branch_name }}"
+                                      data-auto-lock-time="{{ auto_lock_time }}"
+                                      data-auto-lock-unit="{{ auto_lock_unit }}"
+                                      title="点击编辑自动锁定时间">{{ auto_lock_time }}</span>
+                                <span class="auto-lock-unit">{{ '小时' if auto_lock_unit == 'hours' else '分钟' }}</span>
+                            </div>
+                            {% endif %}
+                            <span id="status-{{ project }}-{{ escaped_branch_name }}"
+                                  class="branch-status {% if is_locked %}locked{% else %}unlocked{% endif %}">{{ '已锁定' if is_locked else '已放开' }}</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-{{ project }}-{{ escaped_branch_name }}" {% if
+                                       is_locked %}checked{% endif %}
+                                       onchange="toggleBranch('{{ project }}', '{{ branch_name | escapejs }}')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <button onclick="showDeleteBranchConfirmFromElement(this)" 
+                                    id="delete-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    data-project="{{ project }}" 
+                                    data-branch="{{ branch_name }}"
+                                    class="action-btn action-btn-delete" title="删除">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- 添加管理分支 -->
+                <div style="margin-top: 15px;">
+                    <button onclick="toggleAddBranch('{{ project }}')" id="add-branch-btn-{{ project }}"
+                            class="add-branch-btn" title="添加管理分支">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                    <form id="add-branch-form-{{ project }}"
+                          style="display: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; background: #f8f9fa; border-radius: 6px; margin-top: 6px;"
+                          onsubmit="event.preventDefault(); submitAddBranchForm('{{ project }}')">
+                        <input type="text" name="branch" placeholder="分支名称（如 refs/heads/main）" required
+                               style="flex: 1; min-width: 300px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                        <input type="hidden" name="project" value="{{ project }}">
+                        <div style="display: flex; gap: 4px;">
+                            <button type="submit" class="btn-primary" title="添加分支">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+                            <button type="button" onclick="toggleAddBranch('{{ project }}')" class="btn-cancel"
+                                    title="取消">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- 操作日志 -->
+<div class="project-card">
+    <div class="project-header" onclick="toggleLogContainer()"
+         style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            <span class="project-name">
+                📝 操作日志
+            </span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button onclick="event.stopPropagation(); refreshLogs()" title="刷新日志" class="refresh-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 16h5v5"/>
+                </svg>
+            </button>
+            <button class="toggle-btn">
+                <span id="log-toggle-icon">▼</span>
+            </button>
+        </div>
+    </div>
+    <div id="log-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #f0f0f0;">
+        {% if not logs %}
+        <div style="text-align: center; padding: 20px; color: #999;">暂无操作日志</div>
+        {% else %}
+        <div id="log-list" style="max-height: 300px; overflow-y: auto; font-size: 13px; line-height: 1.6;">
+            {% for log in logs %}
+            <div style="padding: 8px 12px; border-bottom: 1px solid #f5f5f5; color: #555;">{{ log }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 后台任务面板 -->
+<div id="bg-task-panel" class="bg-task-panel collapsed">
+    <div id="bg-task-toggle-btn" class="bg-task-toggle-btn" onclick="toggleBgTaskPanel()" title="后台任务">
+        <span class="bg-task-toggle-icon"><</span>
+    </div>
+    <div class="bg-task-popup">
+        <div class="bg-task-header">
+            <span>📋 后台任务</span>
+            <span id="bg-task-count" class="bg-task-count">0</span>
+            <div class="bg-task-header-actions">
+                <span class="bg-task-collapse-btn" onclick="toggleBgTaskContent()" title="收起内容">▼</span>
+                <span class="bg-task-close-btn" onclick="toggleBgTaskPanel()" title="隐藏面板">></span>
+            </div>
+        </div>
+        <div id="bg-task-content" class="bg-task-content">
+            <div id="bg-task-list">
+                <div style="text-align: center; padding: 20px; color: #999; font-size: 13px;">暂无任务</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

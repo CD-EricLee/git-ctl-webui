@@ -1,0 +1,123 @@
+#!/bin/bash
+
+# Git 分支保护 pre-receive 钩子
+
+# 调试输出函数
+debug() {
+    echo "DEBUG: $1" >&2
+}
+
+# 配置目录路径（优先使用环境变量，否则使用默认路径）
+# 项目配置文件存放在 config/projects/ 目录下
+if [ -n "$GIT_CTL_CONFIG_DIR" ]; then
+    CONFIG_DIR="$GIT_CTL_CONFIG_DIR"
+elif [ -d "/opt/git-ctl-webui/config" ]; then
+    CONFIG_DIR="/opt/git-ctl-webui/config"
+elif [ -d "/workspace/git-ctl-webui/config" ]; then
+    CONFIG_DIR="/workspace/git-ctl-webui/config"
+elif [ -d "/workspace/test-repos" ]; then
+    CONFIG_DIR=$(cd "$(dirname "$0")/../.." && pwd)/config
+else
+    # 尝试从钩子脚本位置推断
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    CONFIG_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)/config
+fi
+
+# 项目配置文件目录
+PROJECTS_DIR="$CONFIG_DIR/projects"
+
+# 记录调试信息
+debug "pre-receive钩子脚本执行"
+
+# 获取项目名称（处理裸仓库的情况）
+REPO_PATH=$(pwd)
+PROJECT_NAME=$(basename "$REPO_PATH")
+# 如果项目名称以 .git 结尾，去掉后缀
+PROJECT_NAME=${PROJECT_NAME%.git}
+
+# 配置文件路径
+PROJECT_CONFIG="$PROJECTS_DIR/$PROJECT_NAME.txt"
+
+# 记录项目信息
+debug "项目: $PROJECT_NAME, 配置: $PROJECT_CONFIG"
+
+# 合并分支列表（去重）
+MERGED_BRANCHES=""
+
+# 只读取项目特定配置
+if [ -f "$PROJECT_CONFIG" ]; then
+    # 处理项目配置中的每一行
+    while IFS= read -r line || [ -n "$line" ]; do
+        # 跳过空行
+        [ -z "$line" ] && continue
+        
+        # 去掉首尾空格
+        line=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
+        
+        if [[ "$line" == \#* ]]; then
+            # 注释行：表示未锁定，从保护列表中移除
+            UNLOCKED_BRANCH=$(echo "$line" | sed 's/^#[ \t]*//')
+            # 从 MERGED_BRANCHES 中移除该分支
+            if [ -n "$MERGED_BRANCHES" ]; then
+                MERGED_BRANCHES=$(echo "$MERGED_BRANCHES" | grep -vFx "$UNLOCKED_BRANCH")
+            fi
+        else
+            # 非注释行：表示锁定，添加到保护列表
+            # 如果分支不在列表中，则添加
+            if ! echo "$MERGED_BRANCHES" | grep -Fxq "$line"; then
+                MERGED_BRANCHES="$MERGED_BRANCHES"$'\n'"$line"
+            fi
+        fi
+    done < "$PROJECT_CONFIG"
+else
+    debug "项目配置文件不存在，允许所有推送"
+    exit 0
+fi
+
+debug "保护分支: $MERGED_BRANCHES"
+
+# 如果合并后为空，允许所有推送
+if [ -z "$MERGED_BRANCHES" ]; then
+    debug "保护分支列表为空，允许推送"
+    exit 0
+fi
+
+# 检查每个推送的分支
+while read -r oldrev newrev refname; do
+    # 检查是否为删除操作（newrev 为全零）
+    if [ "$newrev" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # 只处理分支 push
+    if [[ $refname == refs/heads/* ]]; then
+        # 遍历所有保护分支规则
+        while read -r protected_branch; do
+            # 跳过空行
+            [ -z "$protected_branch" ] && continue
+
+            # 判断是否为正则模式（包含特殊正则字符）
+            if [[ $protected_branch == *".*"* || $protected_branch == *"^"* || $protected_branch == *"\$"* || $protected_branch == *"["* ]]; then
+                # 使用 bash 的正则匹配
+                if [[ $refname =~ $protected_branch ]]; then
+                    echo "========================================" >&2
+                    echo "ERROR: 禁止 push 到分支: $refname" >&2
+                    echo "该分支已被锁定，禁止直接提交！" >&2
+                    echo "========================================" >&2
+                    exit 1
+                fi
+            else
+                # 精确匹配
+                if [ "$refname" = "$protected_branch" ]; then
+                    echo "========================================" >&2
+                    echo "ERROR: 禁止 push 到分支: $refname" >&2
+                    echo "该分支已被锁定，禁止直接提交！" >&2
+                    echo "========================================" >&2
+                    exit 1
+                fi
+            fi
+        done <<< "$MERGED_BRANCHES"
+    fi
+done
+
+exit 0

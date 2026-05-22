@@ -1,0 +1,6 @@
+#!/bin/bash
+# Git pre-receive hook for web-app
+# Managed by Git Control WebUI
+
+echo "Pre-receive hook for web-app"
+exit 0
