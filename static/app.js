@@ -2217,14 +2217,45 @@ function deleteProject(projectName, btn) {
                     // 显示删除成功提示
                     showAlert(`项目 "${projectName}" 删除成功`, 'success', '删除项目');
                     
-                    // 刷新扫描结果（如果当前显示的话）
+                    // 联动更新扫描结果（如果当前显示的话）
                     const scanResults = document.getElementById('scanResults');
                     if (scanResults && scanResults.style.display !== 'none') {
-                        // 重新扫描以更新已管理状态
-                        const basePath = document.getElementById('base-path-input').value;
-                        if (basePath) {
-                            submitScan();
-                        }
+                        // 找到扫描结果中对应的项目行并更新状态
+                        const rows = scanResults.querySelectorAll('tr');
+                        rows.forEach(row => {
+                            const checkbox = row.querySelector('.scanned-checkbox');
+                            if (checkbox && checkbox.value === projectName) {
+                                // 启用勾选框
+                                checkbox.disabled = false;
+                                checkbox.style.opacity = '1';
+                                checkbox.style.cursor = 'pointer';
+                                
+                                // 更新状态列
+                                const cells = row.querySelectorAll('td');
+                                if (cells.length >= 3) {
+                                    cells[2].textContent = '可管理';
+                                    cells[2].style.color = '#4caf50';
+                                }
+                                
+                                // 更新添加按钮
+                                const addBtn = row.querySelector('button');
+                                if (addBtn) {
+                                    addBtn.disabled = false;
+                                    addBtn.style.background = 'none';
+                                    addBtn.style.border = 'none';
+                                    addBtn.style.color = '#4caf50';
+                                    addBtn.style.cursor = 'pointer';
+                                    addBtn.style.padding = '4px';
+                                    addBtn.style.fontSize = '22px';
+                                    addBtn.style.fontWeight = 'bold';
+                                    addBtn.innerHTML = '+';
+                                    addBtn.title = '可管理';
+                                }
+                            }
+                        });
+                        
+                        // 更新批量添加按钮状态
+                        updateBatchButton();
                     }
                 } else {
                     showAlert('删除失败: ' + (data.error || '未知错误'), 'error', '删除项目');
@@ -2506,8 +2537,18 @@ function submitAddBranch(projectName) {
             } else {
                 showAlert(`分支 "${branch}" 添加成功`, 'success', '添加分支');
             }
-            // 刷新整个页面以更新按钮状态
-            setTimeout(() => location.reload(), 500);
+            
+            // 动态添加分支行到页面，保持当前Tab状态
+            addBranchRowToPage(projectName, branch);
+            
+            // 重置表单
+            branchInput.value = '';
+            if (syncAllCheckbox) {
+                syncAllCheckbox.checked = false;
+            }
+            
+            // 隐藏添加表单
+            toggleAddBranch(projectName);
         } else {
             if (data.error && data.error.includes('已存在')) {
                 showAlert(`分支 "${branch}" 已存在`, 'error', '添加分支');
@@ -2530,6 +2571,9 @@ function submitAddBranchForm(projectName) {
 // 异步添加新分支行到页面
 function addBranchRowToPage(projectName, branchName) {
     const escapedBranch = escapeBranchName(branchName);
+    // 转义HTML属性中的双引号
+    const htmlEscapedBranch = branchName.replace(/"/g, '&quot;');
+    // 转义JavaScript字符串中的特殊字符
     const jsBranchName = escapeJsString(branchName);
     const isDefaultProject = projectName === '_default';
     
@@ -2541,19 +2585,28 @@ function addBranchRowToPage(projectName, branchName) {
             <div class="branch-row" id="row-${projectName}-${escapedBranch}">
                 <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
                     <span id="branch-text-${projectName}-${escapedBranch}" class="branch-name">${branchName}</span>
-                    <button onclick="startInlineEdit('${projectName}', '${jsBranchName}')" id="edit-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-edit" title="编辑">
+                    <button onclick="startInlineEditFromElement(this)" id="edit-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-edit" title="编辑">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
                             <path d="m15 5 4 4"></path>
                         </svg>
                     </button>
                     <input type="text" id="branch-input-${projectName}-${escapedBranch}" value="${branchName}" style="display: none; padding: 8px 12px; border: 1px solid #667eea; border-radius: 4px; width: 200px; font-size: 14px;">
-                    <button onclick="saveInlineEdit('${projectName}', '${jsBranchName}')" id="save-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-save" style="display: none;" title="保存">
+                    <button onclick="saveInlineEditFromElement(this)" id="save-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-save" style="display: none;" title="保存">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </button>
-                    <button onclick="cancelInlineEdit('${projectName}', '${jsBranchName}')" id="cancel-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-cancel" style="display: none;" title="取消">
+                    <button onclick="cancelInlineEditFromElement(this)" id="cancel-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-cancel" style="display: none;" title="取消">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -2561,12 +2614,17 @@ function addBranchRowToPage(projectName, branchName) {
                     </button>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <button onclick="syncBranchToAllProjects('${jsBranchName}')" class="action-btn btn-sync" title="应用到所有项目">
+                    <button onclick="syncBranchToAllProjectsFromElement(this)" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn btn-sync" title="应用到所有项目">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 5v14M5 12l7 7 7-7"></path>
                         </svg>
                     </button>
-                    <button onclick="showDeleteBranchConfirm('${projectName}', '${jsBranchName}')" id="delete-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-delete" title="删除">
+                    <button onclick="showDeleteBranchConfirmFromElement(this)" id="delete-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-delete" title="删除">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M3 6h18"></path>
                             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
@@ -2580,22 +2638,34 @@ function addBranchRowToPage(projectName, branchName) {
         // 项目分支结构
         branchRowHTML = `
             <div class="branch-row" id="row-${projectName}-${escapedBranch}">
-                <input type="checkbox" id="select-${projectName}-${escapedBranch}" class="branch-checkbox" onclick="event.stopPropagation(); toggleBranchSelect('${projectName}', '${jsBranchName}')">
+                <input type="checkbox" id="select-${projectName}-${escapedBranch}" class="branch-checkbox" 
+                       onclick="toggleBranchSelectFromElement(this)"
+                       data-project="${projectName}" 
+                       data-branch="${htmlEscapedBranch}">
                 <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
                     <span id="branch-text-${projectName}-${escapedBranch}" class="branch-name">🔒 ${branchName}</span>
-                    <button onclick="startInlineEdit('${projectName}', '${jsBranchName}')" id="edit-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-edit" title="编辑">
+                    <button onclick="startInlineEditFromElement(this)" id="edit-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-edit" title="编辑">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
                             <path d="m15 5 4 4"></path>
                         </svg>
                     </button>
                     <input type="text" id="branch-input-${projectName}-${escapedBranch}" value="${branchName}" style="display: none; padding: 8px 12px; border: 1px solid #667eea; border-radius: 4px; width: 200px; font-size: 14px;">
-                    <button onclick="saveInlineEdit('${projectName}', '${jsBranchName}')" id="save-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-save" style="display: none;" title="保存">
+                    <button onclick="saveInlineEditFromElement(this)" id="save-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-save" style="display: none;" title="保存">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </button>
-                    <button onclick="cancelInlineEdit('${projectName}', '${jsBranchName}')" id="cancel-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-cancel" style="display: none;" title="取消">
+                    <button onclick="cancelInlineEditFromElement(this)" id="cancel-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-cancel" style="display: none;" title="取消">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -2605,10 +2675,16 @@ function addBranchRowToPage(projectName, branchName) {
                 <div class="branch-actions">
                     <span id="status-${projectName}-${escapedBranch}" class="branch-status locked">已锁定</span>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="toggle-${projectName}-${escapedBranch}" checked onchange="toggleBranch('${projectName}', '${jsBranchName}')">
+                        <input type="checkbox" id="toggle-${projectName}-${escapedBranch}" checked 
+                               onchange="toggleBranchFromElement(this)"
+                               data-project="${projectName}" 
+                               data-branch="${htmlEscapedBranch}">
                         <span class="toggle-slider"></span>
                     </label>
-                    <button onclick="showDeleteBranchConfirm('${projectName}', '${jsBranchName}')" id="delete-btn-${projectName}-${escapedBranch}" class="action-btn action-btn-delete" title="删除">
+                    <button onclick="showDeleteBranchConfirmFromElement(this)" id="delete-btn-${projectName}-${escapedBranch}" 
+                            data-project="${projectName}" 
+                            data-branch="${htmlEscapedBranch}"
+                            class="action-btn action-btn-delete" title="删除">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M3 6h18"></path>
                             <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
@@ -2824,7 +2900,9 @@ function syncBranchToAllProjectsFromElement(element) {
 }
 
 function syncBranchToAllProjects(branchName) {
-    showConfirm(`确定要将分支<br><strong>"${branchName}"</strong><br>应用到所有项目吗？`, function() {
+    // 转义分支名中的特殊字符，避免破坏HTML结构
+    const escapedBranchName = branchName.replace(/"/g, '&quot;');
+    showConfirm(`确定要将分支<br><strong>"${escapedBranchName}"</strong><br>应用到所有项目吗？`, function() {
         fetch(`/sync_branch_to_all?branch=${encodeURIComponent(branchName)}`)
             .then(response => response.json())
             .then(data => {

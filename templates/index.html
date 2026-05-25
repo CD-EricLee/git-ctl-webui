@@ -301,7 +301,7 @@
                     </p>
                 </div>
 
-                <form id="addProjectForm" class="add-project-form" onclick="event.stopPropagation()">
+                <form id="addProjectForm" class="add-project-form" onclick="event.stopPropagation()" onsubmit="event.preventDefault()">
                     <div class="add-mode-selector">
                         <select id="add-mode" class="form-control" onchange="toggleAddMode()"
                                 style="width: 140px; flex-shrink: 0;">
