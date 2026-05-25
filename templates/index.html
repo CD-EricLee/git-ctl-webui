@@ -359,8 +359,10 @@
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
                             <span id="branch-text-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
                                   class="branch-name">{{ branch_name }}</span>
-                            <button onclick="startInlineEdit('{{ DEFAULT_CONFIG_NAME }}', '{{ branch_name | escapejs }}')"
+                            <button onclick="startInlineEditFromElement(this)" 
                                     id="edit-btn-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                    data-project="{{ DEFAULT_CONFIG_NAME }}" 
+                                    data-branch="{{ branch_name }}"
                                     class="action-btn action-btn-edit" title="编辑">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -371,16 +373,20 @@
                             <input type="text" id="branch-input-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
                                    value="{{ branch_name }}"
                                    style="display: none; padding: 8px 12px; border: 1px solid #667eea; border-radius: 4px; width: 200px; font-size: 14px;">
-                            <button onclick="saveInlineEdit('{{ DEFAULT_CONFIG_NAME }}', '{{ branch_name | escapejs }}')"
+                            <button onclick="saveInlineEditFromElement(this)" 
                                     id="save-btn-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                    data-project="{{ DEFAULT_CONFIG_NAME }}" 
+                                    data-branch="{{ branch_name }}"
                                     class="action-btn action-btn-save" style="display: none;" title="保存">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
                             </button>
-                            <button onclick="cancelInlineEdit('{{ DEFAULT_CONFIG_NAME }}', '{{ branch_name | escapejs }}')"
+                            <button onclick="cancelInlineEditFromElement(this)" 
                                     id="cancel-btn-{{ DEFAULT_CONFIG_NAME }}-{{ escaped_branch_name }}"
+                                    data-project="{{ DEFAULT_CONFIG_NAME }}" 
+                                    data-branch="{{ branch_name }}"
                                     class="action-btn action-btn-cancel" style="display: none;" title="取消">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -403,7 +409,9 @@
                                 <span class="auto-lock-unit">{{ '小时' if auto_lock_unit == 'hours' else '分钟' }}</span>
                             </div>
                             {% endif %}
-                            <button onclick="syncBranchToAllProjects('{{ branch_name | escapejs }}')" class="action-btn btn-sync"
+                            <button onclick="syncBranchToAllProjectsFromElement(this)" 
+                                    data-branch="{{ branch_name }}"
+                                    class="action-btn btn-sync"
                                     title="应用到所有项目">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -570,11 +578,15 @@
                     <div class="branch-row" id="row-{{ project }}-{{ escaped_branch_name }}">
                         <input type="checkbox" id="select-{{ project }}-{{ escaped_branch_name }}"
                                class="branch-checkbox"
-                               onclick="event.stopPropagation(); toggleBranchSelect('{{ project }}', '{{ branch_name | escapejs }}')">
+                               onclick="event.stopPropagation(); toggleBranchSelectFromElement(this)" 
+                                    data-project="{{ project }}" 
+                                    data-branch="{{ branch_name }}">
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
                             <span id="branch-text-{{ project }}-{{ escaped_branch_name }}" class="branch-name">{{ '🔒 ' if is_locked else '' }}{{ branch_name }}</span>
-                            <button onclick="startInlineEdit('{{ project }}', '{{ branch_name | escapejs }}')"
+                            <button onclick="startInlineEditFromElement(this)" 
                                     id="edit-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    data-project="{{ project }}" 
+                                    data-branch="{{ branch_name }}"
                                     class="action-btn action-btn-edit" title="编辑">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -585,16 +597,20 @@
                             <input type="text" id="branch-input-{{ project }}-{{ escaped_branch_name }}"
                                    value="{{ branch_name }}"
                                    style="display: none; padding: 8px 12px; border: 1px solid #667eea; border-radius: 4px; width: 200px; font-size: 14px;">
-                            <button onclick="saveInlineEdit('{{ project }}', '{{ branch_name | escapejs }}')"
+                            <button onclick="saveInlineEditFromElement(this)" 
                                     id="save-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    data-project="{{ project }}" 
+                                    data-branch="{{ branch_name }}"
                                     class="action-btn action-btn-save" style="display: none;" title="保存">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
                             </button>
-                            <button onclick="cancelInlineEdit('{{ project }}', '{{ branch_name | escapejs }}')"
+                            <button onclick="cancelInlineEditFromElement(this)" 
                                     id="cancel-btn-{{ project }}-{{ escaped_branch_name }}"
+                                    data-project="{{ project }}" 
+                                    data-branch="{{ branch_name }}"
                                     class="action-btn action-btn-cancel" style="display: none;" title="取消">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -622,7 +638,9 @@
                             <label class="toggle-switch">
                                 <input type="checkbox" id="toggle-{{ project }}-{{ escaped_branch_name }}" {% if
                                        is_locked %}checked{% endif %}
-                                       onchange="toggleBranch('{{ project }}', '{{ branch_name | escapejs }}')">
+                                       onchange="toggleBranchFromElement(this)" 
+                                    data-project="{{ project }}" 
+                                    data-branch="{{ branch_name }}">
                                 <span class="toggle-slider"></span>
                             </label>
                             <button onclick="showDeleteBranchConfirmFromElement(this)" 

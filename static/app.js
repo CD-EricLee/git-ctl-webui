@@ -590,6 +590,12 @@ function cancelEditTimeout() {
     }
 }
 
+function startInlineEditFromElement(element) {
+    const project = element.dataset.project;
+    const branch = element.dataset.branch;
+    startInlineEdit(project, branch);
+}
+
 function startInlineEdit(project, branch) {
     const escapedBranch = escapeBranchName(branch);
     const textSpan = document.getElementById(`branch-text-${project}-${escapedBranch}`);
@@ -616,6 +622,12 @@ function startInlineEdit(project, branch) {
             }
         };
     }
+}
+
+function saveInlineEditFromElement(element) {
+    const project = element.dataset.project;
+    const branch = element.dataset.branch;
+    saveInlineEdit(project, branch);
 }
 
 function saveInlineEdit(project, branch) {
@@ -670,16 +682,16 @@ function updateBranchNameOnPage(project, oldBranchName, newBranchName) {
         branchInput.id = `branch-input-${project}-${escapedNewBranch}`;
     }
     
-    // 更新按钮 ID 和 onclick 回调
+    // 更新按钮 ID 和 data-branch 属性
     const buttons = branchRow.querySelectorAll('button');
     buttons.forEach(btn => {
         if (btn.id) {
             btn.id = btn.id.replace(escapedOldBranch, escapedNewBranch);
         }
         
-        const onclickAttr = btn.getAttribute('onclick');
-        if (onclickAttr && onclickAttr.includes(`'${oldBranchName}'`)) {
-            btn.setAttribute('onclick', onclickAttr.replace(`'${oldBranchName}'`, `'${newBranchName}'`));
+        // 更新 data-branch 属性
+        if (btn.dataset.branch === oldBranchName) {
+            btn.dataset.branch = newBranchName;
         }
     });
     
@@ -692,23 +704,29 @@ function updateBranchNameOnPage(project, oldBranchName, newBranchName) {
     const toggleInput = document.getElementById(`toggle-${project}-${escapedOldBranch}`);
     if (toggleInput) {
         toggleInput.id = `toggle-${project}-${escapedNewBranch}`;
-        const toggleAttr = toggleInput.getAttribute('onchange');
-        if (toggleAttr && toggleAttr.includes(`'${oldBranchName}'`)) {
-            toggleInput.setAttribute('onchange', toggleAttr.replace(`'${oldBranchName}'`, `'${newBranchName}'`));
+        // 更新 data-branch 属性
+        if (toggleInput.dataset.branch === oldBranchName) {
+            toggleInput.dataset.branch = newBranchName;
         }
     }
     
     const selectCheckbox = document.getElementById(`select-${project}-${escapedOldBranch}`);
     if (selectCheckbox) {
         selectCheckbox.id = `select-${project}-${escapedNewBranch}`;
-        const selectAttr = selectCheckbox.getAttribute('onclick');
-        if (selectAttr && selectAttr.includes(`'${oldBranchName}'`)) {
-            selectCheckbox.setAttribute('onclick', selectAttr.replace(`'${oldBranchName}'`, `'${newBranchName}'`));
+        // 更新 data-branch 属性
+        if (selectCheckbox.dataset.branch === oldBranchName) {
+            selectCheckbox.dataset.branch = newBranchName;
         }
     }
     
     // 更新状态后关闭编辑模式
     cancelInlineEdit(project, newBranchName);
+}
+
+function cancelInlineEditFromElement(element) {
+    const project = element.dataset.project;
+    const branch = element.dataset.branch;
+    cancelInlineEdit(project, branch);
 }
 
 function cancelInlineEdit(project, branch) {
@@ -956,6 +974,12 @@ function getBranchRow(project, branch) {
     const escapedProject = CSS.escape(project);
     const escapedBranch = CSS.escape(branch);
     return document.getElementById(`row-${escapedProject}-${escapedBranch}`);
+}
+
+function toggleBranchFromElement(element) {
+    const project = element.dataset.project;
+    const branch = element.dataset.branch;
+    toggleBranch(project, branch);
 }
 
 function toggleBranch(project, branch) {
@@ -1256,6 +1280,12 @@ function confirmUnlock() {
 function toggleAutoLock() {
     const enabled = document.getElementById('auto-lock-enable').checked;
     document.getElementById('auto-lock-settings').style.display = enabled ? 'block' : 'none';
+}
+
+function toggleBranchSelectFromElement(element) {
+    const project = element.dataset.project;
+    const branch = element.dataset.branch;
+    toggleBranchSelect(project, branch);
 }
 
 function toggleBranchSelect(project, branch) {
@@ -2788,6 +2818,11 @@ function refreshLogs() {
 }
 
 // 将全局配置的分支应用到所有项目
+function syncBranchToAllProjectsFromElement(element) {
+    const branch = element.dataset.branch;
+    syncBranchToAllProjects(branch);
+}
+
 function syncBranchToAllProjects(branchName) {
     showConfirm(`确定要将分支<br><strong>"${branchName}"</strong><br>应用到所有项目吗？`, function() {
         fetch(`/sync_branch_to_all?branch=${encodeURIComponent(branchName)}`)
@@ -2852,6 +2887,13 @@ function updateProjectBranches(projectName, branches) {
     // 清除现有分支行
     const existingRows = branchesList.querySelectorAll('.branch-row');
     existingRows.forEach(row => row.remove());
+    
+    // 移除暂无分支提示
+    const placeholder = branchesList.querySelector('.no-branches-message') || 
+                       branchesList.querySelector('div[style*="text-align: center"]');
+    if (placeholder) {
+        placeholder.remove();
+    }
     
     // 添加新的分支行
     branches.forEach(branch => {
